@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Хореографічний Планувальник</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Встановлення шрифту та базового чорного фону */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Дуже темний чорний */
+            color: #FFFFFF; /* Білий текст */
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        /* Стиль для головного контейнера */
+        .planner-container {
+            background-color: #000000;
+            border: 2px solid #FBBF24; /* Темно-жовтий акцент */
+            border-radius: 12px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        /* Стиль для кнопки-акценту (темно-жовтий) */
+        .accent-button {
+            background-color: #FBBF24;
+            color: #000000;
+            font-weight: bold;
+            transition: background-color 0.1s;
+        }
+
+        .accent-button:hover:not(:disabled) {
+            background-color: #F59E0B;
+        }
+
+        .accent-button:disabled {
+            background-color: #4B5563;
+            cursor: not-allowed;
+            color: #D1D5DB;
+        }
+
+        /* Стиль для Canvas (Сцена) */
+        #stage-canvas {
+            border: 1px solid #FBBF24;
+            background-color: #374151; /* Темно-сірий фон сцени */
+            cursor: pointer;
+        }
+
+        /* Адаптивність Canvas */
+        .canvas-wrapper {
+            width: 100%;
+            /* Забезпечуємо співвідношення сторін 16:9 для сцени */
+            aspect-ratio: 16 / 9; 
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="planner-container p-6">
+        <h1 class="text-3xl font-extrabold text-center mb-4">Хореографічний Планувальник</h1>
+        <p class="text-center text-sm mb-4 text-gray-400">Клікніть на сцені, щоб додати танцюриста. Перетягуйте, щоб змінити позицію.</p>
+
+        <!-- CANVAS ДЛЯ СЦЕНИ -->
+        <div class="canvas-wrapper mb-6">
+            <canvas id="stage-canvas" class="rounded-lg w-full h-full"></canvas>
+        </div>
+        
+        <!-- НОВИЙ БЛОК: Вибір Стандартних Переходів -->
+        <div class="mb-6 border-t border-gray-700 pt-4">
+            <h3 class="text-xl font-bold mb-2 text-white">Стандартні Переходи (Шаблони)</h3>
+            <div class="flex space-x-4 items-center">
+                <select id="presetSelector" class="flex-1 p-3 rounded-lg bg-gray-700 text-white border border-gray-600">
+                    <option value="">-- Оберіть шаблон переходу --</option>
+                    <!-- Опції додаються динамічно -->
+                </select>
+                <button id="applyPresetBtn" class="accent-button px-4 py-3 rounded-lg" disabled>
+                    Застосувати Шаблон
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">При застосуванні шаблону поточні танцюристи та формації будуть перезаписані.</p>
+        </div>
+
+
+        <!-- ПАНЕЛЬ КЕРУВАННЯ ТАНЦЮРИСТАМИ -->
+        <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+            <button id="addDancerBtn" class="accent-button px-4 py-2 rounded-lg">
+                ➕ Додати Танцюриста
+            </button>
+            <div class="text-lg font-bold text-white">
+                Танцюристів: <span id="dancerCount">0</span>
+            </div>
+            <button id="clearDancersBtn" class="bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">
+                ❌ Очистити Сцену
+            </button>
+        </div>
+
+        <!-- КОНТРОЛЬ ФОРМАЦІЙ -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <button id="setFormationABtn" class="bg-white text-black px-4 py-3 rounded-lg font-bold hover:bg-gray-200 transition">
+                Встановити ФОРМАЦІЮ A
+            </button>
+            <button id="animateBtn" class="accent-button px-4 py-3 rounded-lg text-lg" disabled>
+                ➡️ Анімувати A &rarr; B
+            </button>
+            <button id="setFormationBBtn" class="bg-white text-black px-4 py-3 rounded-lg font-bold hover:bg-gray-200 transition" disabled>
+                Встановити ФОРМАЦІЮ B
+            </button>
+        </div>
+
+        <!-- ІНСТРУМЕНТИ -->
+        <div class="mb-4">
+            <label for="animationDuration" class="block text-sm font-medium mb-2">Тривалість Анімації (с):</label>
+            <input type="number" id="animationDuration" value="2" min="0.5" step="0.5" class="w-full p-2 rounded-lg bg-gray-700 text-white border border-gray-600">
+        </div>
+
+        <!-- ЗБЕРЕЖЕННЯ/ЗАВАНТАЖЕННЯ (JSON) -->
+        <div class="mb-4">
+            <h3 class="text-lg font-bold mb-2 text-gray-300">Дані Формації (JSON)</h3>
+            <textarea id="formationData" rows="4" class="w-full p-2 rounded-lg bg-gray-900 text-green-300 font-mono text-sm" readonly placeholder="Формат JSON для збереження/завантаження даних формацій."></textarea>
+        </div>
+        <div class="flex space-x-4">
+            <button id="copyJsonBtn" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition flex-1">
+                📋 Копіювати JSON
+            </button>
+            <button id="loadJsonBtn" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition flex-1">
+                Завантажити з JSON
+            </button>
+        </div>
+        <p id="statusMessage" class="mt-4 text-center text-sm text-gray-400">Готово до роботи.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('stage-canvas');
+        const ctx = canvas.getContext('2d');
+        const dancerCountDisplay = document.getElementById('dancerCount');
+        const addDancerBtn = document.getElementById('addDancerBtn');
+        const clearDancersBtn = document.getElementById('clearDancersBtn');
+        const setFormationABtn = document.getElementById('setFormationABtn');
+        const setFormationBBtn = document.getElementById('setFormationBBtn');
+        const animateBtn = document.getElementById('animateBtn');
+        const durationInput = document.getElementById('animationDuration');
+        const formationDataArea = document.getElementById('formationData');
+        const copyJsonBtn = document.getElementById('copyJsonBtn');
+        const loadJsonBtn = document.getElementById('loadJsonBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        // Нові елементи для шаблонів
+        const presetSelector = document.getElementById('presetSelector');
+        const applyPresetBtn = document.getElementById('applyPresetBtn');
+
+        let dancers = [];
+        let formationA = [];
+        let formationB = [];
+        let isDragging = false;
+        let draggedDancer = null;
+        let animationStartTime = 0;
+        let animationDuration = 2000; // 2 секунди у мс
+
+        const DANCER_RADIUS = 15;
+        let DANCER_ID_COUNTER = 1;
+        const STAGE_HEIGHT_RATIO = 0.9; // Сцена займає 90% висоти
+
+        // --- Клас Танцюриста ---
+        class Dancer {
+            constructor(id, x, y, color = '#FFFFFF') {
+                this.id = id;
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.isHighlighted = false;
+            }
+
+            draw(context) {
+                context.beginPath();
+                context.arc(this.x, this.y, DANCER_RADIUS, 0, Math.PI * 2);
+                context.fillStyle = this.isHighlighted ? '#FBBF24' : this.color; /* Жовтий, якщо виділено */
+                context.fill();
+                context.strokeStyle = '#000000';
+                context.lineWidth = 2;
+                context.stroke();
+
+                // Малюємо ID
+                context.fillStyle = '#000000';
+                context.font = '12px Inter';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(this.id, this.x, this.y);
+            }
+
+            isHit(mx, my) {
+                const dist = Math.sqrt((mx - this.x) ** 2 + (my - this.y) ** 2);
+                return dist < DANCER_RADIUS;
+            }
+        }
+        
+        // --- ПЕРЕХОДИ-ШАБЛОНИ (PRESET_TRANSITIONS) ---
+        // Функція повертає відносні координати (rx, ry від 0 до 1) для Формацій A і B.
+        // Ви можете додати сюди ще 20+ шаблонів!
+        const PRESET_TRANSITIONS = {
+            // 1. Зірка -> Коло (Для 5 танцюристів)
+            'StarToCircle_5': (N) => {
+                const A = [ // Зірка
+                    { rx: 0.5, ry: 0.15 }, { rx: 0.8, ry: 0.4 }, { rx: 0.65, ry: 0.75 },
+                    { rx: 0.35, ry: 0.75 }, { rx: 0.2, ry: 0.4 }
+                ]; 
+                const B = [ // Коло (П'ятикутник)
+                    { rx: 0.5, ry: 0.2 }, { rx: 0.7, ry: 0.35 }, { rx: 0.6, ry: 0.65 },
+                    { rx: 0.4, ry: 0.65 }, { rx: 0.3, ry: 0.35 }
+                ];
+                return { formationA_rel: A.slice(0, N), formationB_rel: B.slice(0, N), max: 5 };
+            },
+            // 2. Дві Лінії -> Діагональ (Для 6 танцюристів)
+            'LinesToDiagonal_6': (N) => {
+                const A = [ // Дві лінії
+                    { rx: 0.3, ry: 0.2 }, { rx: 0.3, ry: 0.5 }, { rx: 0.3, ry: 0.8 }, 
+                    { rx: 0.7, ry: 0.2 }, { rx: 0.7, ry: 0.5 }, { rx: 0.7, ry: 0.8 } 
+                ];
+                const B = [ // Діагональ
+                    { rx: 0.1, ry: 0.8 }, { rx: 0.25, ry: 0.65 }, { rx: 0.4, ry: 0.5 },
+                    { rx: 0.6, ry: 0.35 }, { rx: 0.75, ry: 0.2 }, { rx: 0.9, ry: 0.05 }
+                ]; 
+                return { formationA_rel: A.slice(0, N), formationB_rel: B.slice(0, N), max: 6 };
+            },
+            // 3. Стіна -> Центр (Для 8 танцюристів)
+            'WallToCenter_8': (N) => {
+                const A = [ // Стіна (дві половини)
+                    { rx: 0.05, ry: 0.2 }, { rx: 0.05, ry: 0.4 }, { rx: 0.05, ry: 0.6 }, { rx: 0.05, ry: 0.8 }, 
+                    { rx: 0.95, ry: 0.2 }, { rx: 0.95, ry: 0.4 }, { rx: 0.95, ry: 0.6 }, { rx: 0.95, ry: 0.8 }  
+                ];
+                const B = [ // Квадрат у центрі
+                    { rx: 0.4, ry: 0.4 }, { rx: 0.6, ry: 0.4 },
+                    { rx: 0.4, ry: 0.6 }, { rx: 0.6, ry: 0.6 },
+                    { rx: 0.5, ry: 0.3 }, { rx: 0.5, ry: 0.7 },
+                    { rx: 0.3, ry: 0.5 }, { rx: 0.7, ry: 0.5 }
+                ]; 
+                return { formationA_rel: A.slice(0, N), formationB_rel: B.slice(0, N), max: 8 };
+            },
+            // 4. Дві Колони -> Хвиля (Для 4 танцюристів)
+            'ColumnsToWave_4': (N) => {
+                const A = [ // Колони
+                    { rx: 0.3, ry: 0.3 }, { rx: 0.3, ry: 0.7 }, 
+                    { rx: 0.7, ry: 0.3 }, { rx: 0.7, ry: 0.7 }
+                ];
+                const B = [ // Хвиля
+                    { rx: 0.1, ry: 0.5 }, { rx: 0.4, ry: 0.25 }, 
+                    { rx: 0.6, ry: 0.75 }, { rx: 0.9, ry: 0.5 }
+                ];
+                return { formationA_rel: A.slice(0, N), formationB_rel: B.slice(0, N), max: 4 };
+            },
+            // 5. Вибух (Для 10 танцюристів)
+             'Explosion_10': (N) => {
+                const A = [ // Скупчення в центрі
+                    { rx: 0.45, ry: 0.45 }, { rx: 0.55, ry: 0.45 }, { rx: 0.45, ry: 0.55 }, { rx: 0.55, ry: 0.55 },
+                    { rx: 0.48, ry: 0.48 }, { rx: 0.52, ry: 0.48 }, { rx: 0.48, ry: 0.52 }, { rx: 0.52, ry: 0.52 },
+                    { rx: 0.5, ry: 0.4 }, { rx: 0.5, ry: 0.6 },
+                ];
+                const B = [ // Вибух до країв
+                    { rx: 0.1, ry: 0.1 }, { rx: 0.9, ry: 0.1 }, { rx: 0.1, ry: 0.8 }, { rx: 0.9, ry: 0.8 },
+                    { rx: 0.5, ry: 0.05 }, { rx: 0.5, ry: 0.85 }, { rx: 0.05, ry: 0.5 }, { rx: 0.95, ry: 0.5 },
+                    { rx: 0.25, ry: 0.25 }, { rx: 0.75, ry: 0.75 },
+                ];
+                return { formationA_rel: A.slice(0, N), formationB_rel: B.slice(0, N), max: 10 };
+            }
+        };
+
+        // Додавання опцій до селектора
+        Object.entries(PRESET_TRANSITIONS).forEach(([key, value]) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key.replace(/_/g, ' ').replace('To', ' → ') + ` (до ${value().max} танцюристів)`;
+            presetSelector.appendChild(option);
+        });
+
+
+        // --- Ініціалізація та Малювання ---
+
+        function resizeCanvas() {
+            // Встановлюємо розмір Canvas відповідно до розміру обгортки (wrapper)
+            const wrapper = canvas.parentElement;
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
+            draw();
+        }
+
+        function draw() {
+            const stageHeight = canvas.height * STAGE_HEIGHT_RATIO;
+            
+            // 1. Очищення Сцени
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. ГЛЯДАЧІ
+            ctx.fillStyle = '#1F2937'; /* Темніший сірий для зони глядачів */
+            ctx.fillRect(0, stageHeight, canvas.width, canvas.height * (1 - STAGE_HEIGHT_RATIO));
+            ctx.fillStyle = '#FBBF24'; /* Жовтий акцент */
+            ctx.font = '14px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText('ГЛЯДАЧІ', canvas.width / 2, canvas.height * STAGE_HEIGHT_RATIO + 20);
+            
+            // 3. СТАТИЧНА РОЗМІТКА СЦЕНИ (ТІЛЬКИ НА СЦЕНІ)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; /* Білі, напівпрозорі лінії */
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]); // Пунктир
+
+            // Центр Сцени (Вертикаль)
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, stageHeight);
+            ctx.stroke();
+
+            // Середина Сцени (Горизонталь)
+            ctx.beginPath();
+            ctx.moveTo(0, stageHeight / 2);
+            ctx.lineTo(canvas.width, stageHeight / 2);
+            ctx.stroke();
+
+            // Квартальні лінії (1/4 і 3/4)
+            ctx.beginPath();
+            ctx.moveTo(canvas.width * 0.25, 0);
+            ctx.lineTo(canvas.width * 0.25, stageHeight);
+            ctx.moveTo(canvas.width * 0.75, 0);
+            ctx.lineTo(canvas.width * 0.75, stageHeight);
+            ctx.stroke();
+
+            ctx.setLineDash([]); // Скидаємо пунктир
+
+
+            // 4. Малюємо танцюристів
+            dancers.forEach(dancer => dancer.draw(ctx));
+
+            // 5. Перемальовуємо, якщо активна анімація
+            if (animationStartTime > 0) {
+                requestAnimationFrame(animateTransition);
+            }
+        }
+
+        // --- Анімація ---
+
+        function animateTransition(timestamp) {
+            if (!animationStartTime) animationStartTime = timestamp;
+
+            const elapsed = timestamp - animationStartTime;
+            const progress = Math.min(1, elapsed / animationDuration); // Прогрес від 0 до 1
+
+            dancers.forEach((dancer, index) => {
+                const startPos = formationA[index];
+                const endPos = formationB[index];
+
+                if (startPos && endPos) {
+                    // Лінійна інтерполяція позицій
+                    dancer.x = startPos.x + (endPos.x - startPos.x) * progress;
+                    dancer.y = startPos.y + (endPos.y - startPos.y) * progress;
+                }
+            });
+
+            draw();
+
+            if (progress < 1) {
+                requestAnimationFrame(animateTransition);
+            } else {
+                // Анімація завершена
+                animationStartTime = 0;
+                statusMessage.textContent = 'Анімація завершена. Танцюристи у Формації B.';
+                // Оновлюємо внутрішні позиції dancers до кінцевих B
+                dancers.forEach((dancer, index) => {
+                    dancer.x = formationB[index].x;
+                    dancer.y = formationB[index].y;
+                });
+                draw();
+            }
+        }
+
+        // --- Керування Даними ---
+
+        function updateDancerCount() {
+            dancerCountDisplay.textContent = dancers.length;
+            // Активація кнопки "Встановити Формацію B" тільки після встановлення А
+            setFormationBBtn.disabled = formationA.length === 0;
+            // Активація кнопки "Анімувати" тільки після встановлення обох формацій
+            animateBtn.disabled = formationA.length === 0 || formationB.length === 0 || formationA.length !== formationB.length;
+            
+            applyPresetBtn.disabled = presetSelector.value === '';
+
+            // Оновлення JSON для копіювання
+            updateFormationJson();
+        }
+
+        function updateFormationJson() {
+            const data = {
+                dancers: dancers.map(d => ({ id: d.id, x: d.x, y: d.y, color: d.color })),
+                formationA: formationA.map(f => ({ id: f.id, x: f.x, y: f.y })),
+                formationB: formationB.map(f => ({ id: f.id, x: f.x, y: f.y }))
+            };
+            formationDataArea.value = JSON.stringify(data, null, 2);
+        }
+
+        // --- Обробники подій Canvas (Керування мишею) ---
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Перевіряємо, чи ми натиснули на існуючого танцюриста
+            draggedDancer = dancers.find(d => d.isHit(mouseX, mouseY));
+
+            dancers.forEach(d => d.isHighlighted = false); // Скидаємо виділення
+
+            if (draggedDancer) {
+                isDragging = true;
+                draggedDancer.isHighlighted = true;
+                draw();
+            } else if (mouseY < canvas.height * STAGE_HEIGHT_RATIO) { // Додаємо, тільки якщо клік на сцені
+                // Якщо натиснули на порожньому місці, додаємо нового танцюриста
+                addDancer(mouseX, mouseY);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging || !draggedDancer) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Обмежуємо рух в межах Сцени (не глядачів)
+            draggedDancer.x = Math.min(Math.max(mouseX, DANCER_RADIUS), canvas.width - DANCER_RADIUS);
+            draggedDancer.y = Math.min(Math.max(mouseY, DANCER_RADIUS), canvas.height * STAGE_HEIGHT_RATIO - DANCER_RADIUS);
+
+            draw();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            draggedDancer = null;
+            draw();
+        });
+
+        // --- Обробники подій Кнопок ---
+
+        function addDancer(x = canvas.width / 2, y = canvas.height / 2) {
+            const newDancer = new Dancer(DANCER_ID_COUNTER++, x, y, '#FFFFFF');
+            dancers.push(newDancer);
+            updateDancerCount();
+            draw();
+            statusMessage.textContent = `Додано танцюриста #${newDancer.id}.`;
+        }
+
+        addDancerBtn.addEventListener('click', () => {
+            // Використовуємо центр сцени
+            addDancer(canvas.width / 2, (canvas.height * STAGE_HEIGHT_RATIO) / 2);
+        });
+
+        clearDancersBtn.addEventListener('click', () => {
+            statusMessage.textContent = 'Сцена повністю очищена.';
+            console.warn('Сцена очищена. Всі танцюристи та формації скинуті.');
+            dancers = [];
+            formationA = [];
+            formationB = [];
+            DANCER_ID_COUNTER = 1;
+            updateDancerCount();
+            draw();
+            // Повертаємо кнопки до початкового стану
+            setFormationABtn.textContent = 'Встановити ФОРМАЦІЮ A';
+            setFormationBBtn.textContent = 'Встановити ФОРМАЦІЮ B';
+        });
+
+        setFormationABtn.addEventListener('click', () => {
+            if (dancers.length === 0) {
+                statusMessage.textContent = 'Додайте танцюристів, перш ніж встановлювати формацію A.';
+                return;
+            }
+            // Зберігаємо копії поточних позицій
+            formationA = dancers.map(d => ({ id: d.id, x: d.x, y: d.y }));
+            setFormationABtn.textContent = `✅ ФОРМАЦІЯ A (Збережено ${dancers.length} позицій)`;
+            setFormationBBtn.disabled = false;
+            animateBtn.disabled = true; // Вимкнути, поки не встановлено B
+            updateDancerCount();
+            statusMessage.textContent = 'Формація A успішно збережена. Тепер перемістіть танцюристів і встановіть B.';
+        });
+
+        setFormationBBtn.addEventListener('click', () => {
+            if (formationA.length === 0) {
+                statusMessage.textContent = 'Спочатку встановіть Формацію A.';
+                return;
+            }
+            if (dancers.length !== formationA.length) {
+                 statusMessage.textContent = `Кількість танцюристів не збігається з Формацією A (${formationA.length}).`;
+                 return;
+            }
+            // Зберігаємо копії поточних позицій
+            formationB = dancers.map(d => ({ id: d.id, x: d.x, y: d.y }));
+            setFormationBBtn.textContent = `✅ ФОРМАЦІЯ B (Збережено ${dancers.length} позицій)`;
+            animateBtn.disabled = false;
+            updateDancerCount();
+            statusMessage.textContent = 'Формація B успішно збережена. Можна анімувати перехід!';
+        });
+
+        animateBtn.addEventListener('click', () => {
+            if (formationA.length !== formationB.length || formationA.length === 0) {
+                statusMessage.textContent = 'Потрібно встановити обидві формації з однаковою кількістю танцюристів.';
+                return;
+            }
+            
+            // Встановлюємо початкові позиції танцюристів на Формацію A перед початком анімації
+            dancers.forEach((dancer, index) => {
+                dancer.x = formationA[index].x;
+                dancer.y = formationA[index].y;
+            });
+
+            animationDuration = parseFloat(durationInput.value) * 1000;
+            animationStartTime = 0; // Скидаємо для початку
+            statusMessage.textContent = 'Початок анімації...';
+            requestAnimationFrame(animateTransition);
+        });
+
+        // --- Обробка Шаблонів ---
+        
+        presetSelector.addEventListener('change', () => {
+            applyPresetBtn.disabled = presetSelector.value === '';
+            if (presetSelector.value) {
+                const maxDancers = PRESET_TRANSITIONS[presetSelector.value]().max;
+                statusMessage.textContent = `Шаблон "${presetSelector.options[presetSelector.selectedIndex].textContent}" готовий. Використовує до ${maxDancers} танцюристів.`;
+            } else {
+                statusMessage.textContent = 'Оберіть шаблон переходу.';
+            }
+        });
+
+        applyPresetBtn.addEventListener('click', () => {
+            const presetKey = presetSelector.value;
+            if (!presetKey || !PRESET_TRANSITIONS[presetKey]) return;
+
+            const N = PRESET_TRANSITIONS[presetKey]().max;
+            
+            // 1. Очищення сцени та додавання N танцюристів
+            dancers = [];
+            DANCER_ID_COUNTER = 1;
+            for (let i = 0; i < N; i++) {
+                // Додаємо танцюристів у випадкову точку, щоб їх можна було перетягнути
+                const newDancer = new Dancer(DANCER_ID_COUNTER++, 100 + i * 5, 100 + i * 5, '#FFFFFF');
+                dancers.push(newDancer);
+            }
+
+            // 2. Отримання відносних позицій
+            const { formationA_rel, formationB_rel } = PRESET_TRANSITIONS[presetKey](N);
+            
+            // 3. Перетворення відносних позицій у абсолютні
+            formationA = formationA_rel.map((pos, index) => ({ 
+                id: dancers[index].id, // Використовуємо фактичний ID створеного танцюриста
+                x: pos.rx * canvas.width, 
+                y: pos.ry * canvas.height * STAGE_HEIGHT_RATIO 
+            }));
+
+            formationB = formationB_rel.map((pos, index) => ({ 
+                id: dancers[index].id,
+                x: pos.rx * canvas.width, 
+                y: pos.ry * canvas.height * STAGE_HEIGHT_RATIO 
+            }));
+
+            // 4. Встановлення танцюристів у Формацію A
+            dancers.forEach((dancer, index) => {
+                dancer.x = formationA[index].x;
+                dancer.y = formationA[index].y;
+            });
+            
+            // 5. Оновлення UI
+            setFormationABtn.textContent = `✅ ФОРМАЦІЯ A (Шаблон: ${presetKey})`;
+            setFormationBBtn.textContent = `✅ ФОРМАЦІЯ B (Шаблон: ${presetKey})`;
+            updateDancerCount();
+            draw();
+            statusMessage.textContent = `Шаблон "${presetKey}" успішно застосовано. Танцюристів: ${N}. Можна анімувати!`;
+        });
+
+
+        // --- Збереження/Завантаження JSON ---
+        
+        copyJsonBtn.addEventListener('click', () => {
+            formationDataArea.select();
+            document.execCommand('copy');
+            statusMessage.textContent = 'Дані JSON скопійовано в буфер обміну!';
+        });
+
+        loadJsonBtn.addEventListener('click', () => {
+            try {
+                const data = JSON.parse(formationDataArea.value);
+                
+                // Очищаємо поточні дані
+                dancers = [];
+                formationA = [];
+                formationB = [];
+                DANCER_ID_COUNTER = 1;
+
+                // Завантажуємо танцюристів
+                if (data.dancers) {
+                    dancers = data.dancers.map(d => new Dancer(d.id, d.x, d.y, d.color));
+                    if (dancers.length > 0) {
+                        // Оновлюємо лічильник, щоб нові танцюристи мали унікальні ID
+                        DANCER_ID_COUNTER = Math.max(...dancers.map(d => d.id)) + 1;
+                    }
+                }
+
+                // Завантажуємо формації A і B
+                if (data.formationA) formationA = data.formationA;
+                if (data.formationB) formationB = data.formationB;
+
+                setFormationABtn.textContent = formationA.length > 0 ? `✅ ФОРМАЦІЯ A (Збережено ${formationA.length} позицій)` : 'Встановити ФОРМАЦІЮ A';
+                setFormationBBtn.textContent = formationB.length > 0 ? `✅ ФОРМАЦІЯ B (Збережено ${formationB.length} позицій)` : 'Встановити ФОРМАЦІЮ B';
+
+                updateDancerCount();
+                draw();
+                statusMessage.textContent = 'Дані успішно завантажено з JSON. Готово до анімації.';
+            } catch (e) {
+                statusMessage.textContent = 'Помилка завантаження JSON. Перевірте формат даних.';
+                console.error('JSON Loading Error:', e);
+            }
+        });
+
+        // --- Ініціалізація ---
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        updateDancerCount();
+        draw(); // Початкове малювання
+
+        // Додаємо кількох танцюристів для зручності при першому запуску
+        addDancer(canvas.width * 0.2, canvas.height * 0.45);
+        addDancer(canvas.width * 0.8, canvas.height * 0.45);
+
+    </script>
+</body>
+</html>
